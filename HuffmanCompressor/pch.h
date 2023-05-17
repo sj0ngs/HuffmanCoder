@@ -14,6 +14,7 @@
 #include <vector>
 #include <commdlg.h>
 #include <cassert>
+#include <string>
 
 using namespace std;
 

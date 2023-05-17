@@ -1,5 +1,11 @@
 #pragma once
 
+struct HuffmanBin
+{
+	char tChar;
+	string tCode;
+};
+
 class HuffmanNode
 {
 private:

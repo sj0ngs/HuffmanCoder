@@ -215,7 +215,6 @@ void CHuffmanCompressorDlg::CreateHFT(const wchar_t* _wcharFilePath, const wchar
 	}
 
 	// 본문 작성
-	fprintf(pFileHFT, "\n");
 	char chBuff = (char)0;
 
 	while (true)
@@ -250,6 +249,10 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 
 	const unordered_map<char, string>& umapCode = m_pTree->GetCode();
 
+	// 메모장 형식 에러 때문에 한칸 비우기
+	int iPadd = 0;
+	fwrite(&iPadd, sizeof(int), 1, pFileHFB);
+
 	// 헤더 작성
 	// 호프만 코드 원소 개수
 	size_t tSize = umapCode.size();
@@ -267,8 +270,8 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 
 		// 실제 호프만 코드 저장
 		byte buffer = 0;
-
 		int iMsb = -1;
+
 		for (size_t i = 0; i < tBits; i++)
 		{
 			if (7 == iMsb)
@@ -276,7 +279,6 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 				fwrite(&buffer, sizeof(byte), 1, pFileHFB);
 				buffer = 0;
 				iMsb = -1;
-				break;
 			}
 
 			buffer = buffer << 1;
@@ -299,7 +301,7 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 	}
 
 	// 본문 작성
-	char chBuff = (char)0;
+	char chBuff = '\0';
 	byte buffer = 0;
 	int iMsb = -1;
 
@@ -317,7 +319,6 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 				fwrite(&buffer, sizeof(byte), 1, pFileHFB);
 				buffer = 0;
 				iMsb = -1;
-				break;
 			}
 
 			buffer = buffer << 1;
@@ -349,85 +350,133 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 
 void CHuffmanCompressorDlg::CreateTXT(const wchar_t* _wcharFilePath, const wchar_t* _wcharFileName)
 {
-	//wchar_t pTXT[1024] = {};
-	//wcscpy_s(pTXT, _wcharFileName);
-	//wcscat_s(pTXT, L".txt");
+	wchar_t pTXT[1024] = {};
+	wcscpy_s(pTXT, _wcharFileName);
+	wcscat_s(pTXT, L".txt");
 
-	//FILE* pFileOrigin = nullptr;
-	//FILE* pFileTXT = nullptr;
+	FILE* pFileOrigin = nullptr;
+	FILE* pFileTXT = nullptr;
 
-	//_wfopen_s(&pFileOrigin, _wcharFilePath, L"rb");
-	//_wfopen_s(&pFileTXT, pTXT, L"wt");
+	_wfopen_s(&pFileOrigin, _wcharFilePath, L"rb");
+	_wfopen_s(&pFileTXT, pTXT, L"wt");
 
-	//if (nullptr == pFileOrigin || nullptr == pFileTXT)
-	//	return;
+	if (nullptr == pFileOrigin || nullptr == pFileTXT)
+		return;
 
-	//const unordered_map<char, string>& umapCode = m_pTree->GetCode();
+	vector<HuffmanBin> vecBin;
 
-	//// 헤더 로드
-	//// 호프만 코드 원소 개수
-	//size_t tSize = umapCode.size();
-	//fwrite(&tSize, sizeof(size_t), 1, pFileHFB);
+	int iPadd = 0;
+	fread(&iPadd, sizeof(int), 1, pFileOrigin);
 
-	//unordered_map<char, byte> umapBits;
+	// 헤더 읽어오기
+	// 호프만 코드 원소 개수
+	size_t tSize = 0;
+	fread(&tSize, sizeof(size_t), 1, pFileOrigin);
 
-	//for (const auto& pair : umapCode)
-	//{
-	//	// 문자 저장
-	//	char cBuff = pair.first;
-	//	fwrite(&cBuff, sizeof(char), 1, pFileHFB);
+	for (int i = 0; i < tSize; i++)
+	{
+		// 문자 불러오기
+		char cBuff = (char)0;
+		fread(&cBuff, sizeof(char), 1, pFileOrigin);
 
-	//	// 호프만 코드의 유효 비트수 저장
-	//	size_t tBits = pair.second.length();
-	//	fwrite(&tBits, sizeof(size_t), 1, pFileHFB);
+		// 호프만 코드의 유효 비트수 불러오기
+		size_t tBits = 0;
+		fread(&tBits, sizeof(size_t), 1, pFileOrigin);
 
-	//	// 실제 호프만 코드 저장
-	//	byte buffer = 0;
+		// 실제 호프만 코드 불러오기
+		byte buffer = 0;
+		int iMfb = -1;
+		
+		string str;
+		while (tBits > 0)
+		{
+			fread(&buffer, sizeof(byte), 1, pFileOrigin);
+			for (int j = 7; j >= 0; j--)
+			{
+				if (tBits <= 0)
+					break;
 
-	//	int iMsb = -1;
-	//	for (size_t i = 0; i < tBits; i++)
-	//	{
-	//		if (7 == iMsb)
-	//		{
-	//			fwrite(&buffer, sizeof(byte), 1, pFileHFB);
-	//			buffer = 0;
-	//			iMsb = -1;
-	//			break;
-	//		}
+				if ((buffer >> j) & 1)
+				{
+					str += "1";
+				}
+				else
+				{
+					str += "0";
+				}
+				tBits--;
+			}
+		}
+		HuffmanBin tmp = { cBuff, str };
+		vecBin.push_back(tmp);
+	}
 
-	//		buffer = buffer << 1;
-	//		if (pair.second[i] == '1')
-	//		{
-	//			buffer |= 1;
-	//		}
-	//		++iMsb;
-	//	}
+	// 본문 불러오기
+	byte buffer = {};
+	short sBuffer = 0;
+	int iMsb = 0;
+	int tCheck = fread(&buffer, sizeof(byte), 1, pFileOrigin);
 
-	//	if (-1 != iMsb)
-	//	{
-	//		while (7 != iMsb)
-	//		{
-	//			buffer = buffer << 1;
-	//			iMsb++;
-	//		}
-	//		fwrite(&buffer, sizeof(byte), 1, pFileHFB);
-	//	}
+	while (true)
+	{
+		if (7 < iMsb)
+		{
+			tCheck = fread(&buffer, sizeof(byte), 1, pFileOrigin);
+			iMsb = -1;
+		}
 
-	//	umapBits[pair.first] = buffer;
-	//}
+		byte tmp = buffer >> (7 - iMsb++);
+		if (1 & tmp)
+		{
+			sBuffer = sBuffer | 1;
+		}
+		char cOrign = '\0';
+		bool bResult = SearchChar(vecBin, sBuffer, &cOrign);
+		
+		sBuffer = sBuffer << 1;
 
-	//// 본문 작성
-	//char chBuff = (char)0;
+		if (bResult)
+		{
+			fwrite(&cOrign, sizeof(char), 1, pFileTXT);
+		}
 
-	//while (true)
-	//{
-	//	size_t tCheck = fread(&chBuff, sizeof(char), 1, pFileOrigin);
-	//	byte szBuff = umapBits[chBuff];
-	//	fwrite(&szBuff, sizeof(byte), 1, pFileHFB);
-	//	if (0 == tCheck)
-	//		break;
-	//}
+		if (0 == tCheck)
+			break;
+	}
 
-	//fclose(pFileOrigin);
-	//fclose(pFileTXT);
+	fclose(pFileOrigin);
+	fclose(pFileTXT);
+}
+
+bool CHuffmanCompressorDlg::SearchChar(const vector<HuffmanBin>& _vec, short _sBuff, char* _pChar)
+{
+	size_t tvecSize = _vec.size();
+	char cResult = '\0';
+
+	for (size_t i = 0; i < tvecSize; i++)
+	{
+		size_t tStrLen = _vec[i].tCode.length();
+
+		for (size_t j = 0; j < tStrLen; j++)
+		{
+			short buff = _sBuff >> (15 - j);
+
+			if (_vec[i].tCode[j] == '0')
+			{
+				// 마지막 비트가 1이라면 거짓
+				if (buff & (short)1)
+					return false;
+			}
+			else
+			{
+				// 마지막 비트가 1이 아니라면 거짓
+				if (!(buff & (short)1))
+					return false;
+			}
+		}
+		
+		*_pChar = _vec[i].tChar;
+		break;
+	}
+	return true;
 }
