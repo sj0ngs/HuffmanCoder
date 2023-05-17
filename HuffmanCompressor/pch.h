@@ -15,6 +15,7 @@
 #include <commdlg.h>
 #include <cassert>
 #include <string>
+#include <algorithm>
 
 using namespace std;
 

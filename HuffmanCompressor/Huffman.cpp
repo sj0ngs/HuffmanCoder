@@ -23,9 +23,10 @@ void HuffmanTree::Create(const wchar_t* _wcharPath)
 	while (true)
 	{
 		size_t tCheck = fread(&chBuff, sizeof(char), 1, pFile);
-		m_umapFreq[chBuff]++;
 		if (0 == tCheck)
 			break;
+
+		m_umapFreq[chBuff]++;
 	}
 
 	fclose(pFile);

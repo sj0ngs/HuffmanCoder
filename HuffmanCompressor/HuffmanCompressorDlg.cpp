@@ -44,6 +44,7 @@ BEGIN_MESSAGE_MAP(CHuffmanCompressorDlg, CDialogEx)
 //	ON_BN_CLICKED(IDC_BUTTON1, &CHuffmanCompressorDlg::OnBnClickedButton1)
 ON_BN_CLICKED(IDC_LOADFILE, &CHuffmanCompressorDlg::OnBnClickedLoadfile)
 ON_BN_CLICKED(IDC_DECOMPRESS, &CHuffmanCompressorDlg::OnBnClickedDecompress)
+ON_BN_CLICKED(IDC_COMPARE, &CHuffmanCompressorDlg::OnBnClickedCompare)
 END_MESSAGE_MAP()
 
 
@@ -132,7 +133,7 @@ void CHuffmanCompressorDlg::OnBnClickedLoadfile()
 	wchar_t szFileNoEx[1024] = {};
 	wcscpy_s(szFileNoEx, szFilePath);
 	size_t tLen = wcslen(szFileNoEx);
-	for (size_t i = tLen - 1; i >= 0; i--)
+	for (size_t i = tLen - 1; i > 0; i--)
 	{
 		if (L'.' == szFileNoEx[i])
 		{
@@ -175,7 +176,7 @@ void CHuffmanCompressorDlg::OnBnClickedDecompress()
 	wchar_t szFileNoEx[1024] = {};
 	wcscpy_s(szFileNoEx, szFilePath);
 	size_t tLen = wcslen(szFileNoEx);
-	for (size_t i = tLen - 1; i >= 0; i--)
+	for (size_t i = tLen - 1; i > 0; i--)
 	{
 		if (L'.' == szFileNoEx[i])
 		{
@@ -300,11 +301,23 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 		}
 	}
 
+	const unordered_map<char, int>& umapFreq = m_pTree->GetFreq();
+
+	// 문자 개수 저장
+	unsigned int iTotalCount = 0;
+	for (const auto& pair : umapFreq)
+	{
+		iTotalCount += (unsigned int)pair.second;
+	}
+
+	fwrite(&iTotalCount, sizeof(unsigned int), 1, pFileHFB);
+
 	// 본문 작성
 	char chBuff = '\0';
 	byte buffer = 0;
 	int iMsb = -1;
-
+	
+	int count = 0;
 	while (true)
 	{
 		size_t tCheck = fread(&chBuff, sizeof(char), 1, pFileOrigin);
@@ -319,6 +332,7 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 				fwrite(&buffer, sizeof(byte), 1, pFileHFB);
 				buffer = 0;
 				iMsb = -1;
+				count++;
 			}
 
 			buffer = buffer << 1;
@@ -341,8 +355,8 @@ void CHuffmanCompressorDlg::CreateHFB(const wchar_t* _wcharFilePath, const wchar
 	}
 
 	fwrite(&buffer, sizeof(byte), 1, pFileHFB);
-	fseek(pFileHFB, 0, SEEK_SET);
-	fwrite(&iMsb, sizeof(char), 1, pFileHFB);
+	//fseek(pFileHFB, 0, SEEK_SET);
+	//fwrite(&iMsb, sizeof(char), 1, pFileHFB);
 
 	fclose(pFileOrigin);
 	fclose(pFileHFB);
@@ -352,7 +366,7 @@ void CHuffmanCompressorDlg::CreateTXT(const wchar_t* _wcharFilePath, const wchar
 {
 	wchar_t pTXT[1024] = {};
 	wcscpy_s(pTXT, _wcharFileName);
-	wcscat_s(pTXT, L".txt");
+	wcscat_s(pTXT, L".hfd");
 
 	FILE* pFileOrigin = nullptr;
 	FILE* pFileTXT = nullptr;
@@ -411,72 +425,222 @@ void CHuffmanCompressorDlg::CreateTXT(const wchar_t* _wcharFilePath, const wchar
 		vecBin.push_back(tmp);
 	}
 
+	sort(vecBin.begin(), vecBin.end(), HuffmanVecCmp);
+
+	// 문자 개수 불러오기
+	unsigned int iTotalCount = 0;
+
+	fread(&iTotalCount, sizeof(unsigned int), 1, pFileOrigin);
+
 	// 본문 불러오기
-	byte buffer = {};
-	short sBuffer = 0;
+	byte buffer = 0;
+	unsigned short sBuffer = 0;
 	int iMsb = 0;
-	int tCheck = fread(&buffer, sizeof(byte), 1, pFileOrigin);
+	int iLen = 0;
 
-	while (true)
+	byte arrBuffer[2] = {};
+	size_t tCheck = 1;
+	fread(&arrBuffer, sizeof(byte), 2, pFileOrigin);
+
+	unsigned int iCount = 0;
+
+	for (size_t i = 0; i < 8; i++)
 	{
-		if (7 < iMsb)
-		{
-			tCheck = fread(&buffer, sizeof(byte), 1, pFileOrigin);
-			iMsb = -1;
-		}
+		sBuffer = sBuffer << 1;
 
-		byte tmp = buffer >> (7 - iMsb++);
-		if (1 & tmp)
+		if (1 & (arrBuffer[0] >> (7 - i)))
 		{
 			sBuffer = sBuffer | 1;
 		}
-		char cOrign = '\0';
-		bool bResult = SearchChar(vecBin, sBuffer, &cOrign);
-		
+	}
+
+	for (size_t i = 0; i < 8; i++)
+	{
 		sBuffer = sBuffer << 1;
+
+		if (1 & (arrBuffer[1] >> (7 - i)))
+		{
+			sBuffer = sBuffer | 1;
+		}
+	}
+	
+	fread(&buffer, sizeof(byte), 1, pFileOrigin);
+
+	while (true)
+	{
+		if (iCount == iTotalCount/*0 == tCheck*/)
+			break;
+
+		char cOrign = '\0';
+		bool bResult = false;
+
+		if (0 == iLen)
+		{
+			bResult = SearchChar(vecBin, sBuffer, &cOrign, &iLen);
+		}
+		iLen--;
 
 		if (bResult)
 		{
 			fwrite(&cOrign, sizeof(char), 1, pFileTXT);
+			iCount++;
 		}
 
-		if (0 == tCheck)
-			break;
+		short tmp = buffer >> (7 - iMsb);
+		iMsb++;
+
+		sBuffer = sBuffer << 1;
+
+		if (1 & tmp)
+		{
+			sBuffer = sBuffer | 1;
+		}
+
+		if (7 < iMsb)
+		{
+			tCheck = fread(&buffer, sizeof(byte), 1, pFileOrigin);
+			iMsb = 0;
+		}
 	}
 
 	fclose(pFileOrigin);
 	fclose(pFileTXT);
 }
 
-bool CHuffmanCompressorDlg::SearchChar(const vector<HuffmanBin>& _vec, short _sBuff, char* _pChar)
+bool CHuffmanCompressorDlg::SearchChar(const vector<HuffmanBin>& _vec, unsigned short _sBuff, char* _pChar, int* _pLen)
 {
 	size_t tvecSize = _vec.size();
 	char cResult = '\0';
 
 	for (size_t i = 0; i < tvecSize; i++)
 	{
+		bool bCheck = true;
 		size_t tStrLen = _vec[i].tCode.length();
 
 		for (size_t j = 0; j < tStrLen; j++)
 		{
-			short buff = _sBuff >> (15 - j);
+			unsigned short buff = _sBuff >> (15 - j);
 
 			if (_vec[i].tCode[j] == '0')
 			{
 				// 마지막 비트가 1이라면 거짓
 				if (buff & (short)1)
-					return false;
+				{
+					bCheck = false;
+					break;
+				}
 			}
 			else
 			{
 				// 마지막 비트가 1이 아니라면 거짓
 				if (!(buff & (short)1))
-					return false;
+				{
+					bCheck = false;
+					break;
+				}
 			}
 		}
 		
-		*_pChar = _vec[i].tChar;
-		break;
+		if (bCheck)
+		{
+			*_pChar = _vec[i].tChar;
+			*_pLen = (int)tStrLen;
+			break;
+		}
 	}
 	return true;
+}
+
+bool HuffmanVecCmp(HuffmanBin _left, HuffmanBin _right)
+{
+	return _left.tCode.length() > _right.tCode.length();
+}
+
+
+void CHuffmanCompressorDlg::OnBnClickedCompare()
+{
+	// open a file name
+	OPENFILENAME ofn = {};
+
+	wchar_t szFilePath1[256] = {};
+	wchar_t szFilePath2[256] = {};
+
+	ZeroMemory(&ofn, sizeof(ofn));
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = NULL;
+	ofn.lpstrFile = szFilePath1;
+	ofn.lpstrFile[0] = '\0';
+	ofn.nMaxFile = 256;
+	ofn.lpstrFilter = L"txt\0*.txt\0ALL\0*.*";
+	ofn.nFilterIndex = 1;
+	ofn.lpstrFileTitle = NULL;
+	ofn.nMaxFileTitle = 0;
+	ofn.lpstrInitialDir = nullptr;
+	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+	if (false == GetOpenFileName(&ofn))
+		return;
+
+	ofn.lpstrFile = szFilePath2;
+	ofn.lpstrFilter = L"hfd\0*.hfd\0ALL\0*.*";
+
+	if (false == GetOpenFileName(&ofn))
+		return;
+
+	FILE* pTxt = nullptr;
+	_wfopen_s(&pTxt, szFilePath1, L"rt");
+	FILE* pHfd = nullptr;
+	_wfopen_s(&pHfd, szFilePath2, L"rt");
+
+
+	if (pTxt == NULL || pHfd == NULL) 
+		return;
+
+	char txtBuff[1024] = {};
+	char hfdBuff[1024] = {};
+	int count = 0;
+
+	bool bCheck = true;
+	while (true) 
+	{
+		count++;
+		if (feof(pTxt) == 0 && feof(pHfd) == 0) 
+		{
+			fgets(txtBuff, 1024, pTxt);
+			fgets(hfdBuff, 1024, pHfd);
+
+			if (strcmp(txtBuff, hfdBuff) != 0)
+			{
+				bCheck = false;
+				break;
+			}
+		}
+		else if (feof(pTxt) != 0 && feof(pHfd) == 0)
+		{
+			bCheck = false;
+			break;
+		}
+		else if (feof(pTxt) == 0 && feof(pHfd) != 0)
+		{
+			bCheck = false;
+			break;
+		}
+		else
+		{
+			bCheck = true;
+			break;
+		}
+	}
+
+	fclose(pTxt);
+	fclose(pHfd);
+
+	if (bCheck)
+	{
+		MessageBoxA(NULL, "두 파일 내용은 일치합니다", "내용 확인", MB_OK);
+	}
+	else
+	{
+		MessageBoxA(NULL, "두 파일 내용은 불일치합니다", "내용 확인", MB_OK);
+	}
 }

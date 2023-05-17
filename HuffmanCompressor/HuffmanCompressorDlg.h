@@ -41,7 +41,10 @@ private:
 	void CreateHFT(const wchar_t* _wcharFilePath, const wchar_t* _wcharFileName);
 	void CreateHFB(const wchar_t* _wcharFilePath, const wchar_t* _wcharFileName);
 	void CreateTXT(const wchar_t* _wcharFilePath, const wchar_t* _wcharFileName);
-	bool SearchChar(const vector<HuffmanBin>& _vec, short _sBuff, char* _pChar);
+	bool SearchChar(const vector<HuffmanBin>& _vec, unsigned short _sBuff, char* _pChar, int* _pLen);
 public:
 	afx_msg void OnBnClickedDecompress();
+	afx_msg void OnBnClickedCompare();
 };
+
+bool HuffmanVecCmp(HuffmanBin _left, HuffmanBin _right);
